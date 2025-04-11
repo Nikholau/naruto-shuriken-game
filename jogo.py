@@ -65,6 +65,7 @@ class GameObject( pygame.sprite.Sprite ):
         
         self.set_pos( position )
         self.set_speed( speed or ( 0, 2 ) )
+        self.mask = pygame.mask.from_surface(self.image)
     # __init__()
 
 
@@ -159,15 +160,22 @@ class NarutoPlayer(Ship):
         self.speed_x = 5
 
     def move_left(self):
+        if hasattr(self, "morto") and self.morto:
+            return
         self.direction = "left"
         self.rect.x -= self.speed_x
 
     def move_right(self):
+        if hasattr(self, "morto") and self.morto:
+            return
         self.direction = "right"
         self.rect.x += self.speed_x
 
     def stop(self):
+        if hasattr(self, "morto") and self.morto:
+            return
         self.direction = "standing"
+
 
     def update(self, dt):
         if hasattr(self, "morto") and self.morto:
@@ -181,6 +189,8 @@ class NarutoPlayer(Ship):
             self.image = self.right_frames[self.current_frame % len(self.right_frames)]
         else:
             self.image = self.standing
+
+        self.mask = pygame.mask.from_surface(self.image)
 
         # Limitar movimento dentro da tela
         if self.rect.left < 0:
@@ -215,6 +225,8 @@ class Enemy(Ship):
             self.frame_counter = 0
             self.current_frame = (self.current_frame + 1) % len(self.frames)
             self.image = self.frames[self.current_frame]
+            self.mask = pygame.mask.from_surface(self.image)
+
 
 
 
@@ -376,12 +388,20 @@ class Game:
 
             # Faça a manutenção do jogo, como criar inimigos, etc.
             self.manage()
+
+            self.score = 0
+            self.font = pygame.font.SysFont(None, 36)
+
             if not self.naruto_atingido:
             # Verifica colisão entre player e inimigos
                 
-                if pygame.sprite.spritecollideany(self.list["player"], self.list["enemies"]):
+                colisores = pygame.sprite.spritecollide(
+                    self.list["player"], self.list["enemies"], dokill=True, collided=pygame.sprite.collide_mask
+                )
+                if colisores:
                     self.naruto_atingido = True
-                    self.list["player"].morto = True  # <- Isso ativa o comportamento de "morte"
+                    self.list["player"].morto = True
+
 
             
             # Desenhe para o back buffer
