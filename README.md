@@ -24,5 +24,5 @@ Um mini jogo estilo arcade feito em Python usando a biblioteca [pygame](https://
 
 1. Clone ou baixe o projeto:
 ```bash
-git clone https://github.com/seu-usuario/NARUTO-SHURIKEN-GAME.git
-cd NARUTO-SHURIKEN-GAME
+git clone https://github.com/Nikholau/naruto-shuriken-game.git
+cd naruto-shuriken-game
