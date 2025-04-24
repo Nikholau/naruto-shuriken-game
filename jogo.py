@@ -16,7 +16,7 @@ import getopt
 import pygame
 from pygame.locals import *
 
-images_dir = os.path.join( "..", "imagens" )
+images_dir = os.path.join(os.path.dirname(__file__), "imagens")
 
 # O random será muito útil para esse jogo, ele ajuda o jogo a perder
 # a monotonia
