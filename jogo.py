@@ -1,18 +1,6 @@
-# -*- coding: utf-8 -*-
-
-###############################################################################
-#
-# Mudanças em relação à versão anterior:
-#    - classe GameObject: representa objetos do jogo (inimigos, tiros, jogador)
-#    - classe Ship: base para todas as naves do jogo
-#    - classe Enemy: presença de inimigos na tela
-#
-###############################################################################
-
 import os, sys
 import getopt
 
-# E importaremos o pygame tambem para esse exemplo
 import pygame
 from pygame.locals import *
 
@@ -66,6 +54,12 @@ class GameObject( pygame.sprite.Sprite ):
         self.set_pos( position )
         self.set_speed( speed or ( 0, 2 ) )
         self.mask = pygame.mask.from_surface(self.image)
+
+        self.tempo_total = 0
+        self.nivel_dificuldade = 1
+        self.tempo_para_aumentar = 5000  # a cada 5 segundos aumenta dificuldade
+        self.ultimo_aumento = 0
+
     # __init__()
 
 
@@ -158,6 +152,7 @@ class NarutoPlayer(Ship):
         self.current_frame = 0
         self.direction = "standing"
         self.speed_x = 5
+        self.morto = False
 
     def move_left(self):
         if hasattr(self, "morto") and self.morto:
@@ -228,10 +223,6 @@ class Enemy(Ship):
             self.mask = pygame.mask.from_surface(self.image)
 
 
-
-
-
-
 class Background:
     def __init__(self, image="bg.png"):
         if isinstance(image, str):
@@ -273,33 +264,73 @@ class Background:
 
 
 
-
 class Game:
     screen = None
     screen_size = None
     run = True
     list = None
     background = None
-    naruto_atingido = False  # Flag para colisão 
+    naruto_hit = False  # Collision flag
+    difficulty_level = 1
+    difficulty_timer = 0
+    difficulty_increase_interval = 5000  # every 5 seconds
     
-    def __init__( self, size, fullscreen ):
-        """
-        Esta é a função que inicializa o pygame, define a resolução da tela,
-        caption, e disabilitamos o mouse dentro desta.
-        """
-        actors = {}
+
+    def __init__(self, size, fullscreen):
         pygame.init()
         flags = DOUBLEBUF
         if fullscreen:
             flags |= FULLSCREEN
-        self.screen       = pygame.display.set_mode( size, flags )
+        self.screen = pygame.display.set_mode(size, flags)
         self.screen_size = self.screen.get_size()
+        pygame.mouse.set_visible(0)
+        pygame.display.set_caption("Naruto Shuriken Game")
+        self.run = True
+        self.score = 0
+        self.font = pygame.font.SysFont(None, 36)
+        self.win_shown = False
 
-        pygame.mouse.set_visible( 0 )
-        pygame.display.set_caption( 'Título da Janela' )
-    # init()
+    def show_win_screen(self):
+        font = pygame.font.SysFont(None, 72)
+        text = font.render("YOU WIN", True, (0, 255, 0))
+        text_rect = text.get_rect(center=(self.screen_size[0] // 2, self.screen_size[1] // 2))
+
+        self.screen.fill((0, 0, 0))  # Tela preta
+        self.screen.blit(text, text_rect)
+        pygame.display.flip()
+
+        # Espera até o jogador pressionar ESC ou fechar a janela
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    waiting = False
+                    self.run = False
+                elif event.type == KEYDOWN:
+                    if event.key == K_ESCAPE:
+                        waiting = False
+                        self.run = False
 
 
+    def manage(self, elapsed_time):
+        if self.naruto_hit:
+            return
+
+        self.difficulty_timer += elapsed_time
+        if self.difficulty_timer >= self.difficulty_increase_interval:
+            self.difficulty_level += 1
+            self.difficulty_timer = 0
+            print(f"Difficulty increased to {self.difficulty_level}")
+
+        r = Random.randint(0, 100)
+        x = Random.randint(1, self.screen_size[0] // 20)
+        max_enemies = 5 + self.difficulty_level * 2
+        if len(self.list["enemies"]) < max_enemies and r > (40 - self.difficulty_level * 2):
+            speed = 2 + self.difficulty_level
+            enemy = Enemy([0, 0], speed=[0, speed])
+            size = enemy.get_size()
+            enemy.set_pos([x * size[0], -size[1]])
+            self.list["enemies"].add(enemy)
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -319,17 +350,41 @@ class Game:
             self.list["player"].move_right()
         else:
             self.list["player"].stop()
-    # handle_events()
 
+    def show_game_over_screen(self):
+        font = pygame.font.SysFont(None, 72)
+        text = font.render("GAME OVER", True, (255, 0, 0))
+        text_rect = text.get_rect(center=(self.screen_size[0] // 2, self.screen_size[1] // 2))
+
+        self.screen.fill((0, 0, 0))  # Tela preta
+        self.screen.blit(text, text_rect)
+        pygame.display.flip()
+
+        # Espera até o jogador pressionar ESC ou fechar a janela
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    waiting = False
+                    self.run = False
+                elif event.type == KEYDOWN:
+                    if event.key == K_ESCAPE:
+                        waiting = False
+                        self.run = False
 
 
     def actors_update(self, dt):
         self.background.update(dt)
         for key, actor in self.list.items():
             if isinstance(actor, pygame.sprite.Group):
-                actor.update(dt)
+                for sprite in actor.sprites():
+                    sprite.update(dt)
+                    if isinstance(sprite, Enemy) and sprite.rect.top > self.screen_size[1]:
+                        self.score += 1
+                        sprite.kill()
             else:
                 actor.update(dt)
+
 
     def actors_draw(self):
         self.background.draw(self.screen)
@@ -339,84 +394,52 @@ class Game:
             else:
                 self.screen.blit(actor.image, actor.rect)
 
+        # Exibir pontuação
+        score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
+        self.screen.blit(score_text, (10, 10))
 
 
 
-    def manage(self):
-        if self.naruto_atingido:
-            return  # para de gerar inimigos após colisão
-
-        # código original continua abaixo:
-        r = Random.randint(0, 100)
-        x = Random.randint(1, self.screen_size[0] // 20)
-        if r > (40 * len(self.list["enemies"])):
-            enemy = Enemy([0, 0])
-            size = enemy.get_size()
-            enemy.set_pos([x * size[0], -size[1]])
-            self.list["enemies"].add(enemy)
-    # manage()
-
-
-    
-    def loop( self ):
-        """
-        Laço principal
-        """
-        # Criamos o fundo
-        self.background = Background( "bg.png" )
-
-        # Inicializamos o relogio e o dt que vai limitar o valor de
-        # frames por segundo do jogo
-        clock         = pygame.time.Clock()
-        dt            = 16
-
+    def loop(self):
+        self.background = Background("bg.png")
+        clock = pygame.time.Clock()
+        dt = 16
         self.list = {
-            "enemies": pygame.sprite.RenderPlain(Enemy([120, 0])),
+            "enemies": pygame.sprite.RenderPlain(),
             "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
         }
 
-
-        # assim iniciamos o loop principal do programa
         while self.run:
-            clock.tick( 1000 / dt )
-
-            # Handle Input Events
+            elapsed = clock.tick(1000 // dt)
             self.handle_events()
+            self.actors_update(dt)
+            self.manage(elapsed)
+            if self.score >= 30 and not self.win_shown:
+                self.win_shown = True
+                self.actors_draw()
+                pygame.display.flip()
+                self.show_win_screen()
 
-            # Atualiza Elementos
-            self.actors_update( dt )
-
-            # Faça a manutenção do jogo, como criar inimigos, etc.
-            self.manage()
-
-            self.score = 0
-            self.font = pygame.font.SysFont(None, 36)
-
-            if not self.naruto_atingido:
-            # Verifica colisão entre player e inimigos
-                
-                colisores = pygame.sprite.spritecollide(
+            if not self.naruto_hit:
+                collisions = pygame.sprite.spritecollide(
                     self.list["player"], self.list["enemies"], dokill=True, collided=pygame.sprite.collide_mask
                 )
-                if colisores:
-                    self.naruto_atingido = True
+                if collisions:
+                    self.naruto_hit = True
                     self.list["player"].morto = True
+                    self.actors_draw()
+                    pygame.display.flip()
+                    self.show_game_over_screen()
 
-
-            
-            # Desenhe para o back buffer
             self.actors_draw()
-            
-            # ao fim do desenho temos que trocar o front buffer e o back buffer
             pygame.display.flip()
-
             print("FPS: %0.2f" % clock.get_fps())
         # while self.run
     # loop()
             
 
    
-# Game
+    # Game
 
 
 def usage():
