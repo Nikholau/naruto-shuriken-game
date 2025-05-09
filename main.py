@@ -9,11 +9,13 @@ from game.enemy import Enemy
 from game.player import NarutoPlayer
 
 class Game:
+
     def __init__(self, size, fullscreen):
         pygame.init()
         flags = DOUBLEBUF
         if fullscreen:
             flags |= FULLSCREEN
+        self.paused = False
         self.screen = pygame.display.set_mode(size, flags)
         self.screen_size = self.screen.get_size()
         pygame.mouse.set_visible(0)
@@ -33,6 +35,7 @@ class Game:
             "enemies": pygame.sprite.RenderPlain(),
             "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
         }
+        
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -41,6 +44,8 @@ class Game:
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     self.run = False
+                elif event.key == K_p:
+                    self.paused = not self.paused
             elif event.type == KEYUP:
                 if event.key in (K_LEFT, K_RIGHT):
                     self.list["player"].stop()
@@ -52,6 +57,21 @@ class Game:
             self.list["player"].move_right()
         else:
             self.list["player"].stop()
+
+
+    def reset_game(self):
+        self.run = True
+        self.paused = False
+        self.naruto_hit = False
+        self.difficulty_level = 1
+        self.difficulty_timer = 0
+        self.score = 0
+        self.win_shown = False
+        self.list = {
+            "enemies": pygame.sprite.RenderPlain(),
+            "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
+            }
+
 
     def manage(self, elapsed_time):
         if self.naruto_hit:
@@ -81,14 +101,26 @@ class Game:
 
         self.screen.fill((0, 0, 0))
         self.screen.blit(text, text_rect)
+
+        sub_font = pygame.font.SysFont(None, 36)
+        sub_text = sub_font.render("Pressione R para reiniciar ou ESC para sair", True, (200, 200, 200))
+        sub_rect = sub_text.get_rect(center=(self.screen_size[0] // 2, self.screen_size[1] // 2 + 60))
+        self.screen.blit(sub_text, sub_rect)
+
         pygame.display.flip()
 
-        waiting = True
-        while waiting:
+        while True:
             for event in pygame.event.get():
-                if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-                    waiting = False
+                if event.type == QUIT:
                     self.run = False
+                    return False
+                elif event.type == KEYDOWN:
+                    if event.key == K_ESCAPE:
+                        self.run = False
+                        return False
+                    elif event.key == K_r:
+                        return True
+
 
     def actors_update(self, dt):
         self.background.update(dt)
@@ -113,6 +145,12 @@ class Game:
         score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
         self.screen.blit(score_text, (10, 10))
 
+    def show_pause_text(self):
+        pause_font = pygame.font.SysFont(None, 72)
+        pause_text = pause_font.render("PAUSED", True, (255, 255, 0))
+        text_rect = pause_text.get_rect(center=(self.screen_size[0] // 2, self.screen_size[1] // 2))
+        self.screen.blit(pause_text, text_rect)
+
     def loop(self):
         clock = pygame.time.Clock()
         dt = 16
@@ -120,29 +158,38 @@ class Game:
         while self.run:
             elapsed = clock.tick(1000 // dt)
             self.handle_events()
-            self.actors_update(dt)
-            self.manage(elapsed)
 
-            if self.score >= 30 and not self.win_shown:
-                self.win_shown = True
-                self.actors_draw()
-                pygame.display.flip()
-                self.show_text_screen("YOU WIN", (0, 255, 0))
+            if not self.paused:
+                self.actors_update(dt)
+                self.manage(elapsed)
 
-            if not self.naruto_hit:
-                collisions = pygame.sprite.spritecollide(
-                    self.list["player"], self.list["enemies"], dokill=True, collided=pygame.sprite.collide_mask
-                )
-                if collisions:
-                    self.naruto_hit = True
-                    self.list["player"].morto = True
+                if self.score >= 30 and not self.win_shown:
+                    self.win_shown = True
                     self.actors_draw()
                     pygame.display.flip()
-                    self.show_text_screen("GAME OVER", (255, 0, 0))
+                    if self.show_text_screen("YOU WIN", (0, 255, 0)):
+                        self.reset_game()
+
+
+                if not self.naruto_hit:
+                    collisions = pygame.sprite.spritecollide(
+                        self.list["player"], self.list["enemies"], dokill=True, collided=pygame.sprite.collide_mask
+                    )
+                    if collisions:
+                        self.naruto_hit = True
+                        self.list["player"].morto = True
+                        self.actors_draw()
+                        pygame.display.flip()
+                        if self.show_text_screen("GAME OVER", (255, 0, 0)):
+                            self.reset_game()
+
+            else:
+                self.show_pause_text()
 
             self.actors_draw()
             pygame.display.flip()
             print("FPS: %0.2f" % clock.get_fps())
+
 
 
 def usage():
