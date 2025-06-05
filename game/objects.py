@@ -43,6 +43,10 @@ class GameObject(pygame.sprite.Sprite):
         return self.image.get_size()
 
 
+class Rasengan(GameObject):
+    def __init__(self, position):
+        super().__init__("rasengan.png", position, speed=(0, -8))
+
 class Ship(GameObject):
     def __init__(self, position, lives=0, speed=[0, 0], image=None):
         self.acceleration = [3, 3]

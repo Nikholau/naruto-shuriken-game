@@ -34,6 +34,7 @@ class Game:
         self.list = {
             "enemies": pygame.sprite.RenderPlain(),
             "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
+            "rasengans": pygame.sprite.RenderPlain(),
         }
         
 
@@ -41,15 +42,24 @@ class Game:
         for event in pygame.event.get():
             if event.type == QUIT:
                 self.run = False
+
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     self.run = False
                 elif event.key == K_p:
                     self.paused = not self.paused
+                elif event.key == K_r and (self.naruto_hit or self.win_shown):
+                    self.__init__(self.screen_size, False)  # Reinicia o jogo
+                elif event.key == K_SPACE:
+                    rasengan = self.list["player"].shoot_rasengan()
+                    if rasengan:
+                        self.list["rasengans"].add(rasengan)
+
             elif event.type == KEYUP:
                 if event.key in (K_LEFT, K_RIGHT):
                     self.list["player"].stop()
 
+        # Movimento contínuo baseado em tecla pressionada
         keys = pygame.key.get_pressed()
         if keys[K_LEFT]:
             self.list["player"].move_left()
@@ -57,6 +67,55 @@ class Game:
             self.list["player"].move_right()
         else:
             self.list["player"].stop()
+
+    
+    def show_start_screen(self):
+        selected_difficulty = 1
+        font = pygame.font.SysFont(None, 36)
+        big_font = pygame.font.SysFont(None, 64)
+
+        while True:
+            self.screen.fill((0, 0, 0))
+            
+            title = big_font.render("Naruto Shuriken Game", True, (255, 255, 0))
+            self.screen.blit(title, (self.screen_size[0] // 2 - title.get_width() // 2, 50))
+
+            instructions = [
+                "Setas ← → para mover",
+                "Espaço para lançar Rasengan",
+                "P para pausar | ESC para sair",
+                "",
+                "Escolha a dificuldade: 1 (Fácil), 2 (Média), 3 (Difícil)",
+                f"Selecionado: {selected_difficulty}",
+                "",
+                "Pressione ENTER para começar"
+            ]
+
+            for i, line in enumerate(instructions):
+                text = font.render(line, True, (255, 255, 255))
+                self.screen.blit(text, (self.screen_size[0] // 2 - text.get_width() // 2, 150 + i * 40))
+
+            pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    self.run = False
+                    return
+                elif event.type == KEYDOWN:
+                    if event.key == K_ESCAPE:
+                        self.run = False
+                        return
+                    elif event.key == K_1:
+                        selected_difficulty = 1
+                    elif event.key == K_2:
+                        selected_difficulty = 2
+                    elif event.key == K_3:
+                        selected_difficulty = 3
+                    elif event.key == K_RETURN:
+                        self.difficulty_level = selected_difficulty
+                        return
+        
+
 
 
     def reset_game(self):
@@ -70,6 +129,7 @@ class Game:
         self.list = {
             "enemies": pygame.sprite.RenderPlain(),
             "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
+            "rasengans": pygame.sprite.RenderPlain(),
             }
 
 
@@ -134,6 +194,16 @@ class Game:
             else:
                 actor.update(dt)
 
+        if "rasengans" in self.list:
+            self.list["rasengans"].update(dt)
+            for rasengan in self.list["rasengans"]:
+                hits = pygame.sprite.spritecollide(rasengan, self.list["enemies"], dokill=False, collided=pygame.sprite.collide_mask)
+                for enemy in hits:
+                    enemy.kill()
+                    self.score += 1
+                    rasengan.kill()
+
+
     def actors_draw(self):
         self.background.draw(self.screen)
         for key, actor in self.list.items():
@@ -142,6 +212,8 @@ class Game:
             else:
                 self.screen.blit(actor.image, actor.rect)
 
+        if "rasengans" in self.list:
+            self.list["rasengans"].draw(self.screen)
         score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
         self.screen.blit(score_text, (10, 10))
 
@@ -152,6 +224,7 @@ class Game:
         self.screen.blit(pause_text, text_rect)
 
     def loop(self):
+        self.show_start_screen()
         clock = pygame.time.Clock()
         dt = 16
 

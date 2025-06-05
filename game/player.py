@@ -2,6 +2,7 @@ import pygame
 import os
 from game.settings import IMAGES_DIR
 from game.objects import Ship
+from game.objects import Rasengan
 
 
 class NarutoPlayer(Ship):
@@ -40,6 +41,9 @@ class NarutoPlayer(Ship):
         if self.morto:
             return
         self.direction = "standing"
+
+    def shoot_rasengan(self):
+        return Rasengan((self.rect.centerx, self.rect.top))
 
     def update(self, dt):
         if self.morto:
