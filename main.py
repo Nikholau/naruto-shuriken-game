@@ -2,6 +2,7 @@ import os
 import sys
 import getopt
 import pygame
+import random
 from pygame.locals import *
 
 from game.background import Background
@@ -20,6 +21,10 @@ class Game:
         self.screen_size = self.screen.get_size()
         pygame.mouse.set_visible(0)
         pygame.display.set_caption("Naruto Shuriken Game")
+
+        self.spawn_timer = 0
+        self.spawn_interval = 1000  # milissegundos (1 segundo)
+
         
         self.run = True
         self.naruto_hit = False
@@ -30,7 +35,7 @@ class Game:
         self.font = pygame.font.SysFont(None, 36)
         self.win_shown = False
 
-        self.background = Background("bg.png")
+        self.background = Background("bg-1.png")
         self.list = {
             "enemies": pygame.sprite.RenderPlain(),
             "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
@@ -68,6 +73,10 @@ class Game:
         else:
             self.list["player"].stop()
 
+    def spawn_enemy(self):
+        x = random.randint(0, self.screen_size[0] - 50)
+        enemy = Enemy((x, -50), speed=(0, self.difficulty_level + 1))
+        self.list["enemies"].add(enemy)
     
     def show_start_screen(self):
         selected_difficulty = 1
@@ -81,7 +90,7 @@ class Game:
             self.screen.blit(title, (self.screen_size[0] // 2 - title.get_width() // 2, 50))
 
             instructions = [
-                "Setas ← → para mover",
+                "Use as setas esquerda e direita para mover",
                 "Espaço para lançar Rasengan",
                 "P para pausar | ESC para sair",
                 "",
@@ -122,15 +131,20 @@ class Game:
         self.run = True
         self.paused = False
         self.naruto_hit = False
-        self.difficulty_level = 1
+        self.win_shown = False  
         self.difficulty_timer = 0
         self.score = 0
-        self.win_shown = False
+
+        self.show_start_screen()
+        self.background.set_image("bg-1.png")  # <-- aqui
+
         self.list = {
             "enemies": pygame.sprite.RenderPlain(),
             "player": NarutoPlayer([self.screen_size[0] // 2, self.screen_size[1] - 100]),
             "rasengans": pygame.sprite.RenderPlain(),
-            }
+        }
+
+
 
 
     def manage(self, elapsed_time):
@@ -143,16 +157,19 @@ class Game:
             self.difficulty_timer = 0
             print(f"Difficulty increased to {self.difficulty_level}")
 
-        import random as Random
-        r = Random.randint(0, 100)
-        x = Random.randint(1, self.screen_size[0] // 20)
-        max_enemies = 5 + self.difficulty_level * 2
-        if len(self.list["enemies"]) < max_enemies and r > (40 - self.difficulty_level * 2):
-            speed = 2 + self.difficulty_level
-            enemy = Enemy([0, 0], speed=[0, speed])
-            size = enemy.get_size()
-            enemy.set_pos([x * size[0], -size[1]])
-            self.list["enemies"].add(enemy)
+            # Troca de fundo baseada no nível
+            if self.difficulty_level == 2:
+                self.background.set_image("bg-2.png")
+            elif self.difficulty_level == 3:
+                self.background.set_image("bg-3.png")
+
+        self.spawn_timer += elapsed_time
+        if self.spawn_timer >= self.spawn_interval:
+            self.spawn_timer = 0
+            self.spawn_enemy()
+
+
+
 
     def show_text_screen(self, message, color):
         font = pygame.font.SysFont(None, 72)
@@ -206,16 +223,22 @@ class Game:
 
     def actors_draw(self):
         self.background.draw(self.screen)
+
+        # Desenha Rasengan antes dos inimigos e jogador
+        if "rasengans" in self.list:
+            self.list["rasengans"].draw(self.screen)
+
         for key, actor in self.list.items():
+            if key == "rasengans":
+                continue  # já desenhado acima
             if isinstance(actor, pygame.sprite.Group):
                 actor.draw(self.screen)
             else:
                 self.screen.blit(actor.image, actor.rect)
 
-        if "rasengans" in self.list:
-            self.list["rasengans"].draw(self.screen)
         score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
         self.screen.blit(score_text, (10, 10))
+
 
     def show_pause_text(self):
         pause_font = pygame.font.SysFont(None, 72)
