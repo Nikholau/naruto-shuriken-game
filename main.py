@@ -10,7 +10,6 @@ from game.enemy import Enemy
 from game.player import NarutoPlayer
 
 class Game:
-
     def __init__(self, size, fullscreen):
         pygame.init()
         flags = DOUBLEBUF
@@ -29,11 +28,14 @@ class Game:
         self.run = True
         self.naruto_hit = False
         self.difficulty_level = 1
+        self.base_enemy_speed = 1  # inicializa base
+        self.difficulty_level = 1
         self.difficulty_timer = 0
         self.difficulty_increase_interval = 5000
         self.score = 0
         self.font = pygame.font.SysFont(None, 36)
         self.win_shown = False
+
 
         self.background = Background("bg-1.png")
         self.list = {
@@ -75,8 +77,19 @@ class Game:
 
     def spawn_enemy(self):
         x = random.randint(0, self.screen_size[0] - 50)
-        enemy = Enemy((x, -50), speed=(0, self.difficulty_level + 1))
+
+        # Velocidade horizontal aumenta com dificuldade
+        vx = random.choice([-1, 0, 1])
+        if self.difficulty_level >= 2:
+            vx = random.choice([-2, -1, 0, 1, 2])
+        if self.difficulty_level >= 3:
+            vx = random.choice([-3, -2, -1, 0, 1, 2, 3])
+
+        vy = self.base_enemy_speed + random.randint(0, 2)
+        enemy = Enemy((x, -50), speed=(vx, vy))
         self.list["enemies"].add(enemy)
+
+
     
     def show_start_screen(self):
         selected_difficulty = 1
@@ -85,7 +98,7 @@ class Game:
 
         while True:
             self.screen.fill((0, 0, 0))
-            
+
             title = big_font.render("Naruto Shuriken Game", True, (255, 255, 0))
             self.screen.blit(title, (self.screen_size[0] // 2 - title.get_width() // 2, 50))
 
@@ -122,7 +135,25 @@ class Game:
                         selected_difficulty = 3
                     elif event.key == K_RETURN:
                         self.difficulty_level = selected_difficulty
+                        # Configuração por nível
+                        if selected_difficulty == 1:
+                            self.list["player"].lives = 5
+                            self.base_enemy_speed = 2
+                            self.target_score = 20
+                            self.max_enemies = 5 + self.difficulty_level * 2
+                        elif selected_difficulty == 2:
+                            self.list["player"].lives = 3
+                            self.base_enemy_speed = 4
+                            self.target_score = 30
+                            self.max_enemies = 5 + self.difficulty_level * 2
+                        elif selected_difficulty == 3:
+                            self.list["player"].lives = 2
+                            self.base_enemy_speed = 6
+                            self.target_score = 40
+                            self.max_enemies = 5 + self.difficulty_level * 2
+
                         return
+
         
 
 
@@ -153,21 +184,30 @@ class Game:
 
         self.difficulty_timer += elapsed_time
         if self.difficulty_timer >= self.difficulty_increase_interval:
-            self.difficulty_level += 1
             self.difficulty_timer = 0
-            print(f"Difficulty increased to {self.difficulty_level}")
 
-            # Troca de fundo baseada no nível
-            if self.difficulty_level == 2:
+            # Incrementa velocidade
+            self.base_enemy_speed += 1
+
+            # Incrementa número máximo de inimigos
+            if not hasattr(self, "max_enemies"):
+                self.max_enemies = 5 + self.difficulty_level * 2
+            self.max_enemies += 1
+
+            print(f"Dificuldade aumentada! Velocidade base: {self.base_enemy_speed}, Max inimigos: {self.max_enemies}")
+
+            # Atualiza background
+            if self.base_enemy_speed >= 5:
                 self.background.set_image("bg-2.png")
-            elif self.difficulty_level == 3:
+            if self.base_enemy_speed >= 8:
                 self.background.set_image("bg-3.png")
 
         self.spawn_timer += elapsed_time
         if self.spawn_timer >= self.spawn_interval:
             self.spawn_timer = 0
-            self.spawn_enemy()
 
+            if len(self.list["enemies"]) < self.max_enemies:
+                self.spawn_enemy()
 
 
 
@@ -214,7 +254,7 @@ class Game:
         if "rasengans" in self.list:
             self.list["rasengans"].update(dt)
             for rasengan in self.list["rasengans"]:
-                hits = pygame.sprite.spritecollide(rasengan, self.list["enemies"], dokill=False, collided=pygame.sprite.collide_mask)
+                hits = pygame.sprite.spritecollide(rasengan, self.list["enemies"], dokill=False, collided=pygame.sprite.collide_rect)
                 for enemy in hits:
                     enemy.kill()
                     self.score += 1
@@ -223,6 +263,8 @@ class Game:
 
     def actors_draw(self):
         self.background.draw(self.screen)
+        lives_text = self.font.render(f"Lives: {self.list['player'].lives}", True, (255, 255, 255))
+        self.screen.blit(lives_text, (10, 40))
 
         # Desenha Rasengan antes dos inimigos e jogador
         if "rasengans" in self.list:
@@ -252,39 +294,42 @@ class Game:
         dt = 16
 
         while self.run:
-            elapsed = clock.tick(1000 // dt)
+            elapsed = clock.tick(60)  # Limite em 60 FPS
             self.handle_events()
 
             if not self.paused:
-                self.actors_update(dt)
+                self.actors_update(elapsed)
                 self.manage(elapsed)
 
+                # Checar colisões com Naruto
+                if not self.naruto_hit:
+                    collisions = pygame.sprite.spritecollide(
+                        self.list["player"], self.list["enemies"], dokill=True, collided=pygame.sprite.collide_mask
+                    )
+                    if collisions:
+                        self.list["player"].lives -= 1
+                        if self.list["player"].lives <= 0:
+                            self.naruto_hit = True
+                            self.list["player"].morto = True
+                            self.actors_draw()
+                            pygame.display.flip()
+                            if self.show_text_screen("GAME OVER", (255, 0, 0)):
+                                self.reset_game()
+
+                # Verificar condição de vitória
                 if self.score >= 30 and not self.win_shown:
                     self.win_shown = True
                     self.actors_draw()
                     pygame.display.flip()
                     if self.show_text_screen("YOU WIN", (0, 255, 0)):
                         self.reset_game()
-
-
-                if not self.naruto_hit:
-                    collisions = pygame.sprite.spritecollide(
-                        self.list["player"], self.list["enemies"], dokill=True, collided=pygame.sprite.collide_mask
-                    )
-                    if collisions:
-                        self.naruto_hit = True
-                        self.list["player"].morto = True
-                        self.actors_draw()
-                        pygame.display.flip()
-                        if self.show_text_screen("GAME OVER", (255, 0, 0)):
-                            self.reset_game()
-
             else:
                 self.show_pause_text()
 
             self.actors_draw()
             pygame.display.flip()
             print("FPS: %0.2f" % clock.get_fps())
+
 
 
 
